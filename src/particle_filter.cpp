@@ -120,20 +120,22 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
     double xm, ym, xc, yc;
     double exponent, mu_x, mu_y;
 
-    
     double sig_x = std_landmark[0];
     double sig_y = std_landmark[1];
-    double gauss_norm = 1/(2 * M_PI * sig_x * sig_y);
+    double gauss_norm = 1 / (2 * M_PI * sig_x * sig_y);
+    double gauss_den_x = 2 * pow(sig_x,2);
+    double gauss_den_y = 2 * pow(sig_y,2);
 
     vector<Map::single_landmark_s> landmarks = map_landmarks.landmark_list;
 
-    double landmark_dist;
+    double xp, yp, thetap, weight;
+    double landmark_dist, obs_to_mark;
 
     for(int i=0; i<num_particles; ++i){
-        double xp = particles[i].x;
-        double yp = particles[i].y;
-        double thetap = particles[i].theta;
-        double weight = 1.0;
+        xp = particles[i].x;
+        yp = particles[i].y;
+        thetap = particles[i].theta;
+        weight = 1.0;
 
         vector<LandmarkObs> nearby_landmarks;
         LandmarkObs nearby_landmark;
@@ -149,12 +151,9 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
                 nearby_landmark.id = landmarks[k].id_i;
                 nearby_landmark.x = landmarks[k].x_f;
                 nearby_landmark.y = landmarks[k].y_f;
-
                 nearby_landmarks.push_back(nearby_landmark);
             } 
         }
-
-        cout << "near landmarks number: " << nearby_landmarks.size() << endl;
 
         for(unsigned int j=0; j<observations.size(); ++j){
             //transform observation position from vehicle to map coordinate
@@ -167,29 +166,33 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
             int min_idx = 0;
             //get the nearest landmark index
             for(unsigned int n=0; n<nearby_landmarks.size(); ++n){
-                double obs_to_mark = dist(xm, ym, nearby_landmarks[n].x, nearby_landmarks[n].y);
-
+                obs_to_mark = dist(xm, ym, nearby_landmarks[n].x, nearby_landmarks[n].y);
                 if(obs_to_mark < obs_to_mark_min){
                     min_idx = nearby_landmarks[n].id;
-                    obs_to_mark_min = obs_to_mark;  
+                    obs_to_mark_min = obs_to_mark;
+                }
+            }
+            //get the nearest landmark postion
+            for(unsigned int n=0; n<nearby_landmarks.size(); ++n){
+                if(nearby_landmarks[n].id == min_idx){
+                    mu_x = nearby_landmarks[n].x;
+                    mu_y = nearby_landmarks[n].y;
+                    break;
                 }
             }
 
-            mu_x = landmarks[min_idx].x_f;
-            mu_y = landmarks[min_idx].y_f;
-
-            exponent = pow(xm-mu_x,2)/(2*pow(sig_x,2)) + pow(ym-mu_y,2)/(2 * pow(sig_y,2));
+            //Multivariate-Gaussian probability 
+            exponent = pow(xm-mu_x,2)/gauss_den_x + pow(ym-mu_y,2)/gauss_den_y;
             weight *= gauss_norm * exp(-exponent);
 
-            cout << "min_idx:" << min_idx << "\t mu x: " << mu_x << "\t mu y: "<<mu_y<< endl;
-            cout << "xm: " << xm << "\tmu_x: " << mu_x << "\tym: "<< ym << "\tmu_y: " << mu_y << endl;
-            cout << "xp: " << xp << "\typ: " << yp << "\tsig_x: " << sig_x << "\tsig_y: " << sig_y<< endl;
-            cout << "gauss_norm: " << gauss_norm << "\texponent: " << exponent << endl;
-            cout << "step weight: " << weight << endl;
+            // cout << "xp: " << xp << "\typ: " << yp << "\tmin_idx: " << min_idx << "\tmin dist: " << obs_to_mark_min << endl;
+            // cout << "xm: " << xm << "\tmu_x: " << mu_x << "\tym: "<< ym << "\tmu_y: " << mu_y << endl;
+            
+            // cout << "exponent: " << exponent << "\tstep weight: " << weight << endl;
         }
         particles[i].weight = weight;
         weights[i] = weight;
-        cout << "particle weight: " << weight << endl;
+        // cout << "particle weight: " << weight << endl;
     }
     // cout << "debug state: updateWeights completed." << endl;
 }
